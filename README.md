@@ -301,7 +301,7 @@ sudo nano /etc/rc.local
 ```bash
 # Wait for X server to be ready
 sleep 10
-su - pi -c "export DISPLAY=:0 && /usr/bin/python3 /home/username/weather_aqi.py &"
+su - pi -c "export DISPLAY=:0 && startx /usr/bin/python3 /home/username/weather_aqi.py &"
 ```
 
 **Note:** Replace `/home/username/weather_aqi.py` with the actual path to your Python file in all methods above. Also replace `pi` with your actual username if different.

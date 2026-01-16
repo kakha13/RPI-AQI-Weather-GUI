@@ -2,12 +2,17 @@ import tkinter as tk
 from datetime import datetime
 import requests
 import time
+import subprocess
 
 # --- CONFIGURATION ---
 API_KEY = "--------------------------------" # OpenWeatherMap API key
 CITY = "Tbilisi"  # Change to your city
 UNITS = "metric"   # Use "imperial" for Fahrenheit
 UPDATE_INTERVAL = 600000  # Update weather every 10 minutes (in ms)
+# Display rotation: "left", "right", "inverted", or "normal"/None
+DISPLAY_ROTATION = "left"
+# Optional: set the display output name (e.g. "DSI-1", "HDMI-1"); auto-detected if None
+DISPLAY_OUTPUT = None
 
 class WeatherApp:
     def __init__(self, root):
@@ -16,6 +21,8 @@ class WeatherApp:
         self.root.attributes('-fullscreen', True)
         self.root.configure(bg='black')
         self.root.bind("<Escape>", lambda e: root.quit()) # Press Esc to exit
+
+        self.apply_display_rotation()
 
         # Layout Frames
         self.top_frame = tk.Frame(root, bg='black')
@@ -43,6 +50,42 @@ class WeatherApp:
 
         self.update_clock()
         self.get_weather()
+
+    def get_display_output(self):
+        """Return the active display output name from xrandr, if available."""
+        try:
+            result = subprocess.run(
+                ["xrandr", "--query"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            for line in result.stdout.splitlines():
+                if " connected primary" in line:
+                    return line.split()[0]
+            for line in result.stdout.splitlines():
+                if " connected" in line:
+                    return line.split()[0]
+        except Exception:
+            return None
+        return None
+
+    def apply_display_rotation(self):
+        """Rotate the display using xrandr if configured."""
+        rotation = DISPLAY_ROTATION
+        if not rotation or rotation == "normal":
+            return
+        output = DISPLAY_OUTPUT or self.get_display_output()
+        if not output:
+            return
+        try:
+            subprocess.run(
+                ["xrandr", "--output", output, "--rotate", rotation],
+                check=True,
+            )
+            time.sleep(0.1)
+        except Exception:
+            return
 
     def update_clock(self):
         now = datetime.now()

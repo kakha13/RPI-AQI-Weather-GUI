@@ -2,6 +2,8 @@ import tkinter as tk
 from datetime import datetime
 import requests
 import json
+import subprocess
+import time
 
 # --- CONFIGURATION ---
 AQI_API_URL = "https://cometer.kakha13.link/api/get/location/7"
@@ -9,6 +11,10 @@ WEATHER_API_KEY = "--------------------------------"  # Get from https://openwea
 CITY = "Tbilisi"  # Change to your city
 UNITS = "metric"   # Use "imperial" for Fahrenheit
 UPDATE_INTERVAL = 300000  # Update every 5 minutes (in ms)
+# Display rotation: "left", "right", "inverted", or "normal"/None
+DISPLAY_ROTATION = "normal"
+# Optional: set the display output name (e.g. "DSI-1", "HDMI-1"); auto-detected if None
+DISPLAY_OUTPUT = None
 
 class WeatherAQIApp:
     def __init__(self, root):
@@ -18,11 +24,24 @@ class WeatherAQIApp:
         self.root.attributes('-fullscreen', True)
         self.root.configure(bg='black')
         self.root.bind("<Escape>", lambda e: root.quit())  # Press Esc to exit
-        
+
+        # Prevent "x" symbol from appearing on touch/click outside widgets
+        self.root.bind("<Button-1>", lambda e: "break")
+        self.root.bind("<ButtonRelease-1>", lambda e: "break")
+
+        # Remove any window border for true fullscreen
+        self.root.configure(highlightthickness=0, borderwidth=0)
+
+        # Apply display rotation before querying screen size
+        self.apply_display_rotation()
+
         # Get screen dimensions for dynamic sizing
         self.root.update_idletasks()
         self.screen_width = self.root.winfo_screenwidth()
         self.screen_height = self.root.winfo_screenheight()
+
+        # Force geometry to match screen size
+        self.root.geometry(f"{self.screen_width}x{self.screen_height}+0+0")
         
         # Detect orientation: portrait (height > width) or landscape
         self.is_portrait = self.screen_height > self.screen_width
@@ -53,34 +72,71 @@ class WeatherAQIApp:
             self.base_font_weather_desc = max(9, min(14, int(self.base_dim * 0.035)))
             self.base_font_aqi_label = max(10, min(16, int(self.base_dim * 0.04)))
             self.base_font_aqi_value = max(28, min(48, int(self.base_dim * 0.12)))
-            self.base_font_particles_label = max(9, min(14, int(self.base_dim * 0.035)))
+            self.base_font_particles_label = max(10, min(16, int(self.base_dim * 0.04)))
             self.base_font_pm_label = max(8, min(12, int(self.base_dim * 0.028)))
             self.base_font_pm_value = max(11, min(16, int(self.base_dim * 0.04)))
             self.base_font_status = max(8, min(11, int(self.base_dim * 0.025)))
         else:
-            # Landscape mode - original sizing
-            self.base_font_clock = max(20, min(40, int(self.screen_height * 0.10)))
-            self.base_font_date = max(9, min(14, int(self.screen_height * 0.035)))
-            self.base_font_location = max(9, min(12, int(self.screen_height * 0.03)))
-            self.base_font_weather_icon = max(35, min(60, int(self.screen_height * 0.15)))
-            self.base_font_weather_temp = max(20, min(40, int(self.screen_height * 0.10)))
-            self.base_font_weather_desc = max(9, min(14, int(self.screen_height * 0.035)))
-            self.base_font_aqi_label = max(11, min(16, int(self.screen_height * 0.04)))
-            self.base_font_aqi_value = max(30, min(56, int(self.screen_height * 0.14)))
-            self.base_font_particles_label = max(9, min(14, int(self.screen_height * 0.035)))
-            self.base_font_pm_label = max(9, min(12, int(self.screen_height * 0.03)))
-            self.base_font_pm_value = max(12, min(18, int(self.screen_height * 0.045)))
-            self.base_font_status = max(8, min(11, int(self.screen_height * 0.025)))
+            # Landscape mode - optimized for 480x320 screens
+            self.base_font_clock = max(20, min(40, int(self.screen_height * 0.12)))
+            self.base_font_date = max(10, min(14, int(self.screen_height * 0.04)))
+            self.base_font_location = max(9, min(12, int(self.screen_height * 0.035)))
+            self.base_font_weather_icon = max(32, min(56, int(self.screen_height * 0.15)))
+            self.base_font_weather_temp = max(20, min(38, int(self.screen_height * 0.11)))
+            self.base_font_weather_desc = max(10, min(14, int(self.screen_height * 0.04)))
+            self.base_font_aqi_label = max(10, min(14, int(self.screen_height * 0.04)))
+            self.base_font_aqi_value = max(28, min(52, int(self.screen_height * 0.14)))
+            self.base_font_particles_label = max(9, min(12, int(self.screen_height * 0.035)))
+            self.base_font_pm_label = max(8, min(11, int(self.screen_height * 0.03)))
+            self.base_font_pm_value = max(12, min(18, int(self.screen_height * 0.05)))
+            self.base_font_status = max(8, min(10, int(self.screen_height * 0.028)))
+
+    def get_display_output(self):
+        """Return the active display output name from xrandr, if available."""
+        try:
+            result = subprocess.run(
+                ["xrandr", "--query"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            for line in result.stdout.splitlines():
+                if " connected primary" in line:
+                    return line.split()[0]
+            for line in result.stdout.splitlines():
+                if " connected" in line:
+                    return line.split()[0]
+        except Exception:
+            return None
+        return None
+
+    def apply_display_rotation(self):
+        """Rotate the display using xrandr if configured."""
+        rotation = DISPLAY_ROTATION
+        if not rotation or rotation == "normal":
+            return
+        output = DISPLAY_OUTPUT or self.get_display_output()
+        if not output:
+            return
+        try:
+            subprocess.run(
+                ["xrandr", "--output", output, "--rotate", rotation],
+                check=True,
+            )
+            # Give X a moment to apply the rotation before querying size
+            time.sleep(0.1)
+        except Exception:
+            return
 
     def build_ui(self):
         """Build the UI layout based on orientation"""
-        # Main container frame - full width and height
-        self.main_frame = tk.Frame(self.root, bg='black')
-        self.main_frame.pack(fill="both", expand=True, padx=5, pady=5)
+        # Main container frame - full screen
+        self.main_frame = tk.Frame(self.root, bg='black', highlightthickness=0, borderwidth=0)
+        self.main_frame.pack(fill="both", expand=True, padx=0, pady=0)
 
         # Top section - Clock and Date (centered)
         top_frame = tk.Frame(self.main_frame, bg='black')
-        top_frame.pack(side="top", fill="x", pady=(0, 5))
+        top_frame.pack(side="top", fill="x", pady=(0, 0))
 
         # Clock Label
         self.lbl_clock = tk.Label(top_frame, font=("Arial", self.base_font_clock, "bold"), fg="white", bg="black")
@@ -88,15 +144,15 @@ class WeatherAQIApp:
 
         # Date Label
         self.lbl_date = tk.Label(top_frame, font=("Arial", self.base_font_date), fg="#aaaaaa", bg="black")
-        self.lbl_date.pack(pady=(2, 0))
+        self.lbl_date.pack(pady=(0, 0))
 
         # Location Label
         self.lbl_location = tk.Label(top_frame, font=("Arial", self.base_font_location, "bold"), fg="#4CAF50", bg="black")
-        self.lbl_location.pack(pady=(2, 0))
+        self.lbl_location.pack(pady=(0, 0))
 
         # Content container
         content_frame = tk.Frame(self.main_frame, bg='black')
-        content_frame.pack(side="top", fill="both", expand=True, pady=(5, 0))
+        content_frame.pack(side="top", fill="both", expand=True, pady=(0, 0))
 
         if self.is_portrait:
             # PORTRAIT MODE: Stack Weather on top, AQI below
@@ -107,7 +163,7 @@ class WeatherAQIApp:
 
         # Status/Error Label (bottom)
         self.lbl_status = tk.Label(self.main_frame, font=("Arial", self.base_font_status), fg="#ff4444", bg="black")
-        self.lbl_status.pack(side="bottom", pady=(3, 0))
+        self.lbl_status.pack(side="bottom", pady=(0, 0))
 
     def build_portrait_layout(self, parent):
         """Build portrait layout - content stacked vertically"""
@@ -180,55 +236,61 @@ class WeatherAQIApp:
         self.lbl_pm1.pack()
 
     def build_landscape_layout(self, parent):
-        """Build landscape layout - content side by side"""
+        """Build landscape layout - content side by side, centered and filling space"""
         # LEFT SIDE - Weather section
         left_frame = tk.Frame(parent, bg='black')
-        left_frame.pack(side="left", fill="both", expand=True, padx=(0, 10))
+        left_frame.pack(side="left", fill="both", expand=True, padx=0)
 
-        tk.Label(left_frame, text="Weather", font=("Arial", self.base_font_aqi_label, "bold"), fg="#aaaaaa", bg="black").pack(pady=(0, 5))
+        tk.Label(
+            left_frame,
+            text="Weather",
+            font=("Arial", self.base_font_aqi_label, "bold"),
+            fg="#aaaaaa",
+            bg="black",
+        ).pack(expand=True, pady=0)
 
         self.lbl_weather_symbol = tk.Label(left_frame, font=("Arial", self.base_font_weather_icon), fg="gold", bg="black")
-        self.lbl_weather_symbol.pack(pady=(3, 5))
+        self.lbl_weather_symbol.pack(expand=True, pady=0)
 
         self.lbl_weather_temp = tk.Label(left_frame, font=("Arial", self.base_font_weather_temp, "bold"), fg="white", bg="black")
-        self.lbl_weather_temp.pack()
+        self.lbl_weather_temp.pack(expand=True, pady=0)
 
         self.lbl_weather_desc = tk.Label(left_frame, font=("Arial", self.base_font_weather_desc, "italic"), fg="#aaaaaa", bg="black")
-        self.lbl_weather_desc.pack(pady=(3, 0))
+        self.lbl_weather_desc.pack(expand=True, pady=0)
 
         # RIGHT SIDE - AQI section
         right_frame = tk.Frame(parent, bg='black')
-        right_frame.pack(side="right", fill="both", expand=True, padx=(10, 0))
+        right_frame.pack(side="right", fill="both", expand=True, padx=0)
 
         self.lbl_aqi_label = tk.Label(right_frame, text="AQI", font=("Arial", self.base_font_aqi_label, "bold"), fg="#aaaaaa", bg="black")
-        self.lbl_aqi_label.pack(pady=(0, 3))
+        self.lbl_aqi_label.pack(expand=True, pady=0)
 
         self.lbl_aqi_value = tk.Label(right_frame, font=("Arial", self.base_font_aqi_value, "bold"), fg="white", bg="black")
-        self.lbl_aqi_value.pack(pady=(3, 5))
+        self.lbl_aqi_value.pack(expand=True, pady=0)
 
         particles_label = tk.Label(right_frame, text="Particles", font=("Arial", self.base_font_particles_label, "bold"), fg="#aaaaaa", bg="black")
-        particles_label.pack(pady=(0, 3))
+        particles_label.pack(expand=True, pady=0)
 
         particles_container = tk.Frame(right_frame, bg='black')
-        particles_container.pack()
+        particles_container.pack(expand=True)
 
         # PM2.5
         pm25_frame = tk.Frame(particles_container, bg='black')
-        pm25_frame.pack(side="left", padx=5)
+        pm25_frame.pack(side="left", padx=4)
         tk.Label(pm25_frame, text="PM2.5", font=("Arial", self.base_font_pm_label), fg="#aaaaaa", bg="black").pack()
         self.lbl_pm25 = tk.Label(pm25_frame, font=("Arial", self.base_font_pm_value, "bold"), fg="#FF9800", bg="black")
         self.lbl_pm25.pack()
 
         # PM10
         pm10_frame = tk.Frame(particles_container, bg='black')
-        pm10_frame.pack(side="left", padx=5)
+        pm10_frame.pack(side="left", padx=4)
         tk.Label(pm10_frame, text="PM10", font=("Arial", self.base_font_pm_label), fg="#aaaaaa", bg="black").pack()
         self.lbl_pm10 = tk.Label(pm10_frame, font=("Arial", self.base_font_pm_value, "bold"), fg="#FF5722", bg="black")
         self.lbl_pm10.pack()
 
         # PM1
         pm1_frame = tk.Frame(particles_container, bg='black')
-        pm1_frame.pack(side="left", padx=5)
+        pm1_frame.pack(side="left", padx=4)
         tk.Label(pm1_frame, text="PM1", font=("Arial", self.base_font_pm_label), fg="#aaaaaa", bg="black").pack()
         self.lbl_pm1 = tk.Label(pm1_frame, font=("Arial", self.base_font_pm_value, "bold"), fg="#9C27B0", bg="black")
         self.lbl_pm1.pack()
