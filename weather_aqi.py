@@ -32,6 +32,9 @@ class WeatherAQIApp:
         # Remove any window border for true fullscreen
         self.root.configure(highlightthickness=0, borderwidth=0)
 
+        # Disable screen blanking/power saving
+        self.disable_screen_blanking()
+
         # Apply display rotation before querying screen size
         self.apply_display_rotation()
 
@@ -90,6 +93,18 @@ class WeatherAQIApp:
             self.base_font_pm_label = max(8, min(11, int(self.screen_height * 0.03)))
             self.base_font_pm_value = max(12, min(18, int(self.screen_height * 0.05)))
             self.base_font_status = max(8, min(10, int(self.screen_height * 0.028)))
+
+    def disable_screen_blanking(self):
+        """Disable X screen blanking and DPMS power saving to prevent screen going black."""
+        try:
+            # Disable screen saver
+            subprocess.run(["xset", "s", "off"], check=False, capture_output=True)
+            # Disable DPMS (Display Power Management Signaling)
+            subprocess.run(["xset", "-dpms"], check=False, capture_output=True)
+            # Disable screen blanking
+            subprocess.run(["xset", "s", "noblank"], check=False, capture_output=True)
+        except Exception:
+            pass  # Silently ignore if xset is not available
 
     def get_display_output(self):
         """Return the active display output name from xrandr, if available."""
