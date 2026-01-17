@@ -6,8 +6,8 @@ import subprocess
 import time
 
 # --- CONFIGURATION ---
-AQI_API_URL = "https://cometer.kakha13.link/api/get/location/7"
-WEATHER_API_KEY = "--------------------------------"  # Get from https://openweathermap.org/api
+AQI_API_URL = "https://cometer.kakha13.link/api/get/location/"
+WEATHER_API_KEY = "7d21bd0821bf293239d8dbb692b59b8b"  # Get from https://openweathermap.org/api
 CITY = "Tbilisi"  # Change to your city
 UNITS = "metric"   # Use "imperial" for Fahrenheit
 UPDATE_INTERVAL = 300000  # Update every 5 minutes (in ms)
@@ -15,36 +15,58 @@ UPDATE_INTERVAL = 300000  # Update every 5 minutes (in ms)
 DISPLAY_ROTATION = "normal"
 # Optional: set the display output name (e.g. "DSI-1", "HDMI-1"); auto-detected if None
 DISPLAY_OUTPUT = None
+# Window configuration: Set FULLSCREEN to False and WINDOW_SIZE to (width, height) for windowed mode
+# Example: WINDOW_SIZE = (800, 480) for a 800x480 window
+# If FULLSCREEN is True, WINDOW_SIZE is ignored
+FULLSCREEN = False  # Set to False for windowed mode
+WINDOW_SIZE = (480, 320)  # Optional: (width, height) tuple, e.g. (800, 480)
 
 class WeatherAQIApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Pi Zero Weather & AQI")
-        # Fullscreen mode
-        self.root.attributes('-fullscreen', True)
         self.root.configure(bg='black')
         self.root.bind("<Escape>", lambda e: root.quit())  # Press Esc to exit
 
-        # Prevent "x" symbol from appearing on touch/click outside widgets
-        self.root.bind("<Button-1>", lambda e: "break")
-        self.root.bind("<ButtonRelease-1>", lambda e: "break")
-
-        # Remove any window border for true fullscreen
-        self.root.configure(highlightthickness=0, borderwidth=0)
-
-        # Disable screen blanking/power saving
-        self.disable_screen_blanking()
-
-        # Apply display rotation before querying screen size
-        self.apply_display_rotation()
+        # Configure window mode (fullscreen or windowed)
+        if FULLSCREEN:
+            # Fullscreen mode
+            self.root.attributes('-fullscreen', True)
+            # Prevent "x" symbol from appearing on touch/click outside widgets
+            self.root.bind("<Button-1>", lambda e: "break")
+            self.root.bind("<ButtonRelease-1>", lambda e: "break")
+            # Remove any window border for true fullscreen
+            self.root.configure(highlightthickness=0, borderwidth=0)
+            # Disable screen blanking/power saving
+            self.disable_screen_blanking()
+            # Apply display rotation before querying screen size
+            self.apply_display_rotation()
+        else:
+            # Windowed mode - set window size if specified
+            if WINDOW_SIZE and isinstance(WINDOW_SIZE, (tuple, list)) and len(WINDOW_SIZE) == 2:
+                width, height = WINDOW_SIZE
+                self.root.geometry(f"{width}x{height}")
+            # Center window on screen
+            self.root.update_idletasks()
+            screen_width = self.root.winfo_screenwidth()
+            screen_height = self.root.winfo_screenheight()
+            window_width = self.root.winfo_width()
+            window_height = self.root.winfo_height()
+            x = (screen_width - window_width) // 2
+            y = (screen_height - window_height) // 2
+            self.root.geometry(f"{window_width}x{window_height}+{x}+{y}")
 
         # Get screen dimensions for dynamic sizing
         self.root.update_idletasks()
-        self.screen_width = self.root.winfo_screenwidth()
-        self.screen_height = self.root.winfo_screenheight()
-
-        # Force geometry to match screen size
-        self.root.geometry(f"{self.screen_width}x{self.screen_height}+0+0")
+        if FULLSCREEN:
+            self.screen_width = self.root.winfo_screenwidth()
+            self.screen_height = self.root.winfo_screenheight()
+            # Force geometry to match screen size
+            self.root.geometry(f"{self.screen_width}x{self.screen_height}+0+0")
+        else:
+            # Use actual window size in windowed mode
+            self.screen_width = self.root.winfo_width()
+            self.screen_height = self.root.winfo_height()
         
         # Detect orientation: portrait (height > width) or landscape
         self.is_portrait = self.screen_height > self.screen_width
@@ -411,6 +433,7 @@ class WeatherAQIApp:
             # Extract AQI data
             aqi = data.get('aqi', {})
             aqi_data = aqi.get('data', {})
+            aqi_current = aqi.get('current', {})
 
             # Get overall AQI value
             overall_aqi = aqi_data.get('overall', 0)
@@ -422,10 +445,16 @@ class WeatherAQIApp:
             self.lbl_aqi_value.config(text=f"{overall_aqi}", fg=api_color)
             self.lbl_aqi_label.config(text=f"AQI: {level}", fg=api_color)
 
-            # Update PM values
-            pm25 = aqi_data.get('PMS25', 0)
-            pm10 = aqi_data.get('PMS10', 0)
-            pm1 = aqi_data.get('PMS1', 0)
+            # Update PM values - use current, fallback to data if all zeros
+            pm25 = aqi_current.get('PMS25', 0)
+            pm10 = aqi_current.get('PMS10', 0)
+            pm1 = aqi_current.get('PMS1', 0)
+
+            # If all current values are zero, use aqi.data values instead
+            if pm25 == 0 and pm10 == 0 and pm1 == 0:
+                pm25 = aqi_data.get('PMS25', 0)
+                pm10 = aqi_data.get('PMS10', 0)
+                pm1 = aqi_data.get('PMS1', 0)
 
             self.lbl_pm25.config(text=f"{pm25}")
             self.lbl_pm10.config(text=f"{pm10}")
