@@ -7,7 +7,7 @@ import time
 
 # --- CONFIGURATION ---
 AQI_API_URL = "https://cometer.kakha13.link/api/get/location/"
-WEATHER_API_KEY = "7d21bd0821bf293239d8dbb692b59b8b"  # Get from https://openweathermap.org/api
+WEATHER_API_KEY = "--------------------------------"  # Get from https://openweathermap.org/api
 CITY = "Tbilisi"  # Change to your city
 UNITS = "metric"   # Use "imperial" for Fahrenheit
 UPDATE_INTERVAL = 300000  # Update every 5 minutes (in ms)
@@ -18,7 +18,7 @@ DISPLAY_OUTPUT = None
 # Window configuration: Set FULLSCREEN to False and WINDOW_SIZE to (width, height) for windowed mode
 # Example: WINDOW_SIZE = (800, 480) for a 800x480 window
 # If FULLSCREEN is True, WINDOW_SIZE is ignored
-FULLSCREEN = False  # Set to False for windowed mode
+FULLSCREEN = True  # Set to False for windowed mode
 WINDOW_SIZE = (480, 320)  # Optional: (width, height) tuple, e.g. (800, 480)
 
 class WeatherAQIApp:
